@@ -19,7 +19,6 @@ const YTkey = 'YOUTUBE SEARCH API KEY';
 	One Song: [ Song-Title/URL ] --> Current song playing.
 	Two Songs: [ Song-Title/URL, Song-Title/URL ] --> Current song playing + another.
 
-	// TODO: Make sure "playing" variable is properly implemented, OR remove it all together.
 */
 
 export default class Player {
@@ -28,8 +27,7 @@ export default class Player {
 		this.dispatcher;
 		this.connection;
 		this.queue = [];
-		this.playing = false;
-		this.title = ''; // For adding official title for displaying the queue.
+		this.title = []; // For adding official title for displaying the queue.
 		this.options = {
 			q: '',
 			maxResults: 3,
@@ -38,85 +36,93 @@ export default class Player {
 	}
 
 	async musicOptions(command, message, args) {
-		// Play command scenarios.
-		// 	- URL 			--> args[0] = URL.
-		// 	- Song Title 	--> args[0:] = Song Title.
-		if(command == "play"){
 
-			if(message.member.voice.channel){
-				this.connection = await message.member.voice.channel.join();
-			} else {
-				message.channel.send("User is not inside of a voice channel.");
-				return;
-			}
+		switch(command) {
+			case 'play':
 
-			if(this.queue.length == 0) {
-				if (this.validURL(args[0])) {
-					this.queue.push(args[0]); // Adds Song/url.
-					this.playLink(this.queue[0], this.connection, message);
+				if(message.member.voice.channel){
+					this.connection = await message.member.voice.channel.join();
 				} else {
-					var query = args.join(' ');
-					this.queue.push(query);
-					this.search(message);
+					message.channel.send("User is not inside of a voice channel.");
+					return;
 				}
 
-			} else if (this.queue.length >= 1) {
-				if(this.validURL(args[0])){
-					this.queue.push(args[0]);
-				} else {
-					var query = args.join(' ');
-					this.queue.push(query);
-				}
-				message.react('👍');
-			}
+				if(this.queue.length == 0) {
+					if (ytdl.validateURL(args[0])) {
+						this.queue.push(args[0]); // Adds Song/url.
+						this.addTitle(args[0]); // Adds title to the queue.
+						this.playLink(this.queue[0], this.connection, message);
+					} else {
+						var query = args.join(' ');
+						this.queue.push(query);
+						this.addTitle(query);
+						this.search(message);
+					}
 
-		} else if (command == "queue") {
-			this.showQueue(message);
-		} else if (command == "stop") {
-			this.stop();
-		} else if (command == "pause"){
-			this.pause();
-		} else if (command == "resume") {
-			this.resume();
-		} else if (command == "skip") {
-			this.skip(message);
-		} else if (command == "remove") {
-			this.remove(args[0], message);
+				} else if (this.queue.length >= 1) {
+					if(ytdl.validateURL(args[0])){
+						this.queue.push(args[0]);
+						this.addTitle(args[0]);
+					} else {
+						var query = args.join(' ');
+						this.queue.push(query);
+						this.addTitle(query);
+					}
+					message.react('👍');
+				}
+
+				break;
+			case 'queue':
+				this.showQueue(message);
+				break;
+			case 'stop':
+				this.stop();
+				break;
+			case 'pause':
+				this.pause();
+				break;
+			case 'resume':
+				this.resume();
+				break;
+			case 'skip':
+				this.skip(message);
+				break;
+			case 'remove':
+				this.remove(args[0], message);
+				break;
 		}
+
 	}
 
 	async playLink(url, connection, message){
-		this.dispatcher = connection.play(ytdl(url, { filter: 'audioonly'} ));
-
-		this.dispatcher.on('start', () => { this.playing = true });
+		this.dispatcher = connection.play(ytdl(url, { filter: 'audioonly', highWaterMark: 1<<25 } ));
 
 		this.dispatcher.on('finish', () => { 
 			this.queue.shift();
-			if(this.queue.length != 0){
-				if(this.validURL(this.queue[0]))
+			this.title.shift();
+
+			if(this.queue.length != 0)
+				if(ytdl.validateURL(this.queue[0]))
 					this.playLink(this.queue[0], this.connection, message);
 				else
 					this.search(message);
-			} else {
-				this.playing = false;
-			}
 		});
+
+		this.dispatcher.on('error', error => { console.log(error) });
 	}
 
 	stop(){
 		this.dispatcher.destroy();
-		this.playing = false;
 		this.queue = [];
+		this.title = [];
 	}
 
 	pause(){
 		this.dispatcher.pause();
-		this.playing = false;
 	}
 
 	resume() {
 		this.dispatcher.resume();
-		this.playing = true;
 	}
 
 
@@ -126,7 +132,8 @@ export default class Player {
 		} else {
 			this.dispatcher.destroy();
 			this.queue.shift();
-			if(this.validURL(this.queue[0]))
+			this.title.shift();
+			if(ytdl.validateURL(this.queue[0]))
 				this.playLink(this.queue[0], this.connection, message);
 			else
 				this.search(message);
@@ -139,12 +146,20 @@ export default class Player {
 		} else if (position > (this.queue.length - 1)) {
 			message.channel.send("Invalid position.");
 		} else {
-			if((position + 1) == this.queue.length) { // Remove the last element.
-				message.channel.send("Successfully removed " + this.queue[this.queue.length - 1] + " from the queue1.");
+			if((parseInt(position) + 1) == this.queue.length) { // Remove the last element.
+				message.channel.send("Successfully removed " + this.queue[this.queue.length - 1] + " from the queue.");
 				this.queue.pop();
+				this.title.pop();
 			} else { // Remove the element in between first index to last index.
-				message.channel.send("Successfully removed " + this.queue[position] + " from the queue2.");
-				this.queue.slice((position - 1), (position + 1));
+				message.channel.send("Successfully removed " + this.queue[position] + " from the queue.");
+				delete this.queue[position];
+				delete this.title[position];
+				for(var count = parseInt(position) + 1; this.queue[count] != undefined; count++){
+					this.queue[count - 1] = this.queue[count];
+					this.title[count - 1] = this.title[count];
+				}
+				this.queue.pop();
+				this.title.pop();
 			}
 		} 
 	}
@@ -167,19 +182,20 @@ export default class Player {
 	}
 
 	showQueue(message) {
-		for(var i = 0; i < this.queue.length; i++)
-			console.log("\tElement " + (i + 1) + ": " + this.queue[i]);
+		this.decodeTitle();
+		for(var i = 0; i < this.title.length; i++)
+			console.log("\tElement " + (i + 1) + ": " + this.title[i]);
 		console.log("--------------------");
 
 		const queueEmbed = new Discord.MessageEmbed()
 			.setColor('#FF4500')
 			.setTitle('Music Player Queue (Will be updated)');
 
-		if(this.queue.length > 0) {
-			var songList = "Currently Playing: " + this.queue[0] + "\n";
-			for(var count in this.queue)
+		if(this.title.length > 0) {
+			var songList = "Currently Playing: " + this.title[0] + "\n";
+			for(var count in this.title)
 				if(count != 0)
-					songList = songList.concat((count) + " --> " + this.queue[count] + "\n");
+					songList = songList.concat((count) + " --> " + this.title[count] + "\n");
 
 			queueEmbed.setDescription(songList);
 		} else {
@@ -190,15 +206,28 @@ export default class Player {
 		
 	}
 
+	async addTitle(query) { // Adds the title of YouTube video to the "queue".
+		if(ytdl.validateURL(query))
+			this.options.q = ytdl.getURLVideoID(query);	
+		else
+			this.options.q = query;
+		
+		let result = await searchYoutube(YTkey, this.options);
+		this.title.push(result.items[0].snippet.title);
+	}
 
-	validURL(str) { // Useful method to check if a url is valid.
-		var pattern = new RegExp('^(https?:\\/\\/)?'+ // Protocol.
-		'((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|'+ // Domain name.
-		'((\\d{1,3}\\.){3}\\d{1,3}))'+ // OR ip (v4) address.
-		'(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*'+ // Port and path.
-		'(\\?[;&a-z\\d%_.~+=-]*)?'+ // Query string.
-		'(\\#[-a-z\\d_]*)?$','i'); // Fragment locator.
-		return !!pattern.test(str);
+	decodeTitle(){
+		for(var count = 0; this.title[count] != undefined; count++){
+			var decode = this.title[count].toString();
+			decode = decode.split('&quot;').join('\"');
+			decode = decode.split('&apos;').join('\'');
+			decode = decode.split('&amp;').join('&');
+			decode = decode.split('&lt;').join('<');
+			decode = decode.split('&gt;').join('>');
+			decode = decode.split('&iexcl;').join('¡');
+			decode = decode.split('&iquest;').join('¿');
+			this.title[count] = decode;
+		}
 	}
 
 }
