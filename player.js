@@ -147,14 +147,14 @@ export default class Player {
 			message.channel.send("Invalid position.");
 		} else {
 			if((parseInt(position) + 1) == this.queue.length) { // Remove the last element.
-				message.channel.send("Successfully removed " + this.queue[this.queue.length - 1] + " from the queue.");
+				message.channel.send("Successfully removed " + this.title[this.queue.length - 1] + " from the queue.");
 				this.queue.pop();
 				this.title.pop();
 			} else { // Remove the element in between first index to last index.
-				message.channel.send("Successfully removed " + this.queue[position] + " from the queue.");
+				message.channel.send("Successfully removed " + this.title[position] + " from the queue.");
 				delete this.queue[position];
 				delete this.title[position];
-				for(var count = parseInt(position) + 1; this.queue[count] != undefined; count++){
+				for(var count = parseInt(position) + 1; this.title[count] != undefined; count++){
 					this.queue[count - 1] = this.queue[count];
 					this.title[count - 1] = this.title[count];
 				}
@@ -213,7 +213,7 @@ export default class Player {
 			this.options.q = query;
 		
 		let result = await searchYoutube(YTkey, this.options);
-		this.title.push(result.items[0].snippet.title);
+		this.title.push(result.items[0].snippet.title); // There may be an issue here where snippet is undefined.
 	}
 
 	decodeTitle(){
