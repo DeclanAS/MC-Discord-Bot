@@ -2,7 +2,7 @@ const Discord = require('discord.js');
 const bot = new Discord.Client();
 const ytdl = require('ytdl-core');
 
-const token = 'DISCORD BOT\'S UNIQUE TOKEN';
+const token = 'BOT TOKEN';
 const prefix = "habibi";
 
 import Player from './player.js';
