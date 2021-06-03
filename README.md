@@ -3,6 +3,7 @@
 
 ## Dependencies:
 - youtube-api-v3-search
+- node-witai-speech
 - genius-lyrics-api
 - discord.js
 - ytdl-core
