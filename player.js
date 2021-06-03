@@ -1,11 +1,10 @@
+import { getSong, searchSong } from 'genius-lyrics-api'
+import searchYoutube from 'youtube-api-v3-search'
+import * as config from './config.js'
+import Emessage from './Emessage.js'
 
-import searchYoutube from 'youtube-api-v3-search';
-import { getSong, searchSong } from 'genius-lyrics-api';
-import Emessage from './Emessage.js';
 const Discord = require('discord.js');
 const ytdl = require('ytdl-core');
-const YTkey = 'N/A';
-const Geniuskey = 'N/A';
 
 /*	Music Player Queue Options:
 	- Play (No song in queue)
@@ -26,15 +25,14 @@ const Geniuskey = 'N/A';
 
 export default class Player {
 
-	constructor(){ // Constructor
-
+	constructor() { // Constructor
 		this.dispatcher; // What plays sounds.
 		this.connection; // Connection link to the voice channel.
 		this.queue = []; // Array that acts like a queue.
 		this.title = []; // For adding official title for displaying the queue.
 		this.options = { // Youtube query options.
 			q: '',
-			maxResults: 2,
+			maxResults: 1,
 			type: 'video'
 		};
 	}
@@ -42,39 +40,44 @@ export default class Player {
 	async musicOptions(command, message, args) {
 
 		// Switch for different commands passed in.
-		switch(command) {
+		switch (command) {
 			case 'play': // Play command
 
-				if(message.member.voice.channel){ // Checks if user is in the voice channel.
+				if (message.member.voice.channel) { // Checks if user is in the voice channel.
 					this.connection = await message.member.voice.channel.join();
 				} else {
 					message.channel.send("User is not inside of a voice channel.");
 					return;
 				}
 
-				if(this.queue.length == 0) { // Play options if the queue is empty:
-
+				if (this.queue.length == 0) { // Play options if the queue is empty:
 					if (ytdl.validateURL(args[0])) { // If the link is a proper Youtube video URL.
-						this.queue.push(args[0]); // Adds url to queue.
-						this.addTitle(args[0]); // Adds title to the queue.
-						this.playLink(this.queue[0], this.connection, message); // Plays song
+						let valid = await this.setOptions(query, 1, message)
+						if (valid) {
+							this.queue.push(args[0]); // Adds url to queue.
+							this.playLink(this.queue[0], this.connection, message); // Plays song
+						}
 
 					} else { // If the song request is a Youtube search.
 						var query = args.join(' '); // Puts the query into a single string.
-						this.queue.push(query); // Adds Song query to the queue.
-						this.addTitle(query); // Adds title to the queue.
-						this.search(message); // Searches Youtube and plays the resulting song.
+						let valid = await this.setOptions(query, 1, message)
+						if (valid) {
+							this.queue.push(query); // Adds song query to the queue.
+							this.search(message); // Searches Youtube and plays the resulting song.
+						}
 					}
 
 				} else if (this.queue.length >= 1) { // Same as above, except if the query is not empty.
+					if (ytdl.validateURL(args[0])) { // If the user passed a valid Youtube video url as a song request.
+						let valid = await this.setOptions(query, 1, message)
+						if (valid)
+							this.queue.push(args[0]);
 
-					if(ytdl.validateURL(args[0])){ // If the user passed a valid Youtube video url as a song request.
-						this.queue.push(args[0]); 
-						this.addTitle(args[0]);
 					} else { // If the user passed a Youtube search query as a song request.
 						var query = args.join(' ');
-						this.queue.push(query);
-						this.addTitle(query);
+						let valid = await this.setOptions(query, 1, message)
+						if (valid)
+							this.queue.push(query);
 					}
 					message.react('👍'); // Reacts with a thumbs up instead of messaging in the channel.
 				}
@@ -109,7 +112,7 @@ export default class Player {
 
 		// Uses ytdl-core to play the song url.
 		// - Filtered for audio only, and with a high buffering size.
-		this.dispatcher = connection.play(ytdl(url, { filter: 'audioonly', highWaterMark: 1<<25 } ));
+		this.dispatcher = connection.play(ytdl(url, { filter: 'audioonly', highWaterMark: 1 << 25 }));
 
 		// Dispatcher events:
 		// Finish:
@@ -117,12 +120,12 @@ export default class Player {
 		// - Checks if there is another song in the queue, and plays it depending on if it is a URL or YT search request.
 		// Error:
 		// - Displays to console. (Usually picks up TCP disconnect errors).
-		this.dispatcher.on('finish', () => { 
+		this.dispatcher.on('finish', () => {
 			this.queue.shift();
 			this.title.shift();
 
-			if(this.queue.length != 0)
-				if(ytdl.validateURL(this.queue[0]))
+			if (this.queue.length != 0)
+				if (ytdl.validateURL(this.queue[0]))
 					this.playLink(this.queue[0], this.connection, message);
 				else
 					this.search(message);
@@ -137,7 +140,7 @@ export default class Player {
 		this.title = [];
 	}
 
-	pause(){ // Pauses dispatcher.
+	pause() { // Pauses dispatcher.
 		this.dispatcher.pause();
 	}
 
@@ -145,16 +148,15 @@ export default class Player {
 		this.dispatcher.resume();
 	}
 
-
 	skip(message) { // Ends current song, plays the next in the queue (if any).
 
-		if(this.queue.length < 2){
+		if (this.queue.length < 2) {
 			message.channel.send("Cannot skip song (no other songs in queue).");
 		} else {
 			this.dispatcher.destroy();
 			this.queue.shift();
 			this.title.shift();
-			if(ytdl.validateURL(this.queue[0]))
+			if (ytdl.validateURL(this.queue[0]))
 				this.playLink(this.queue[0], this.connection, message);
 			else
 				this.search(message);
@@ -163,7 +165,7 @@ export default class Player {
 
 	remove(position, message) { // Removes a certain song in the queue given user input.
 
-		if(this.queue.length < 2) { // If the queue is too small.
+		if (this.queue.length < 2) { // If the queue is too small.
 			message.channel.send("The queue is not large enough to remove a song.");
 
 		} else if (position > (this.queue.length - 1)) { // If the user enters too high of a position.
@@ -171,7 +173,7 @@ export default class Player {
 
 		} else { // If there is a valid position inputted.
 
-			if((parseInt(position) + 1) == this.queue.length) { // Remove the last element.
+			if ((parseInt(position) + 1) == this.queue.length) { // Remove the last element.
 				message.channel.send("Successfully removed " + this.title[this.queue.length - 1] + " from the queue.");
 				this.queue.pop();
 				this.title.pop();
@@ -181,50 +183,47 @@ export default class Player {
 				message.channel.send("Successfully removed " + this.title[position] + " from the queue.");
 				delete this.queue[position];
 				delete this.title[position];
-				for(var count = parseInt(position) + 1; this.title[count] != undefined; count++){
+				for (var count = parseInt(position) + 1; this.title[count] != undefined; count++) {
 					this.queue[count - 1] = this.queue[count];
 					this.title[count - 1] = this.title[count];
 				}
 				this.queue.pop();
 				this.title.pop();
 			}
-		} 
+		}
 	}
 
 	async search(message) { // Search function to gather the Youtube title & video ID
 
 		this.options.q = this.queue[0]; // Sets "q" (query) to current queue element.
-		let result = await searchYoutube(YTkey, this.options); // Gathers Youtube search results.
-
-		for(var count in result.items) { // Loops through results.
-			var item = result.items[count];
-			if(count == 0) { // Gathers the first element and plays this Youtube link.
-				var URL = 'https://www.youtube.com/watch?v=';
-				message.channel.send("Now playing: " + URL.concat(item.id.videoId));
-				this.playLink(URL.concat(item.id.videoId), this.connection, message);
-			}
-
+		let result = await searchYoutube(config.Youtube, this.options)
+		if (result.pageInfo.totalResults > 0) {
+			var item = result.items[0]
+			var URL = 'https://www.youtube.com/watch?v=';
+			message.channel.send("Now playing: " + URL.concat(item.id.videoId));
+			this.playLink(URL.concat(item.id.videoId), this.connection, message);
 			console.log("Youtube Search Results For \"" + this.options.q + "\" --> " + item.snippet.title + " [" + item.id.videoId + "]");
+		} else {
+			return
 		}
-		console.log(" ");
+
 	}
 
 	showQueue(message) { // Displays the queue to both the user and log.
 
 		this.decodeTitle(); // Cleans up title of HTML encoding.
-		for(var i = 0; i < this.title.length; i++)
+		for (var i = 0; i < this.title.length; i++)
 			console.log("\tElement " + (i + 1) + ": " + this.title[i]);
-		console.log("--------------------");
 
 		// Sets up an embedding to display the queue contents.
 		const queueEmbed = new Discord.MessageEmbed()
 			.setColor('#FF4500')
 			.setTitle('Music Player Queue (Will be updated)');
 
-		if(this.title.length > 0) {
+		if (this.title.length > 0) {
 			var songList = "Currently Playing: " + this.title[0] + "\n";
-			for(var count in this.title)
-				if(count != 0)
+			for (var count in this.title)
+				if (count != 0)
 					songList = songList.concat((count) + " --> " + this.title[count] + "\n");
 
 			queueEmbed.setDescription(songList);
@@ -233,23 +232,37 @@ export default class Player {
 		}
 
 		message.channel.send(queueEmbed);
-		
+
 	}
 
-	async addTitle(query) { // Adds the title of YouTube video to the "queue".
-
-		if(ytdl.validateURL(query))
-			this.options.q = ytdl.getURLVideoID(query);	
-		else
+	async setOptions(query, type, message) { // Adds the title of YouTube video to the "queue".
+		if (type == 0)
+			this.options.q = ytdl.getURLVideoID(query);
+		else if (type == 1)
 			this.options.q = query;
-		
-		let result = await searchYoutube(YTkey, this.options);
-		this.title.push(result.items[0].snippet.title); // There may be an issue here where snippet is undefined.
+
+		let result = await this.getTitle(message)
+
+		return result
+	}
+
+	async getTitle(message) {
+		let result = await searchYoutube(config.Youtube, this.options)
+
+		if (result.pageInfo.totalResults == 0) {
+			console.log('No Results')
+			message.channel.send(new Emessage().createNotification('#F0F0F0', 'No Results Found', 'Your search turned up no results.', 'MC bot'))
+			return false
+
+		} else {
+			this.title.push(result.items[0].snippet.title); // There may be an issue here where snippet is undefined.
+			return true
+		}
 	}
 
 	decodeTitle() { // Decodes HTML encoding.
 
-		for(var count = 0; this.title[count] != undefined; count++){
+		for (var count = 0; this.title[count] != undefined; count++) {
 			var decode = this.title[count].toString();
 			decode = decode.split('&quot;').join('\"');
 			decode = decode.split('&apos;').join('\'');
@@ -277,7 +290,7 @@ export default class Player {
 		var lyrics_1 = '', lyrics_2 = '', lyrics_3 = '', lyrics_4 = '';
 		var embed_1 = new Emessage(), embed_2 = new Emessage(), embed_3 = new Emessage(), embed_4 = new Emessage();
 		var options = { // Lyrics query options.
-			apiKey: Geniuskey,
+			apiKey: config.Genius,
 			title: this.queue[0],
 			artist: this.queue[0],
 			optimizeQuery: true
@@ -296,29 +309,31 @@ export default class Player {
 		console.log(lyrics.length);
 
 		// Formatting the lyrics into embeds with respect to lyrics length & sending.
-		if (lyrics.length < 2048){
+		if (lyrics == null) {
+			message.channel.send(embed_1.createLyrics('#FFFFFF', 'Error', 'Could not find lyrics.', '', 'MC bot - Using Genius Api'));
+		} else if (lyrics.length < 2048) {
 			message.channel.send(embed_1.createLyrics('#FFFF00', searchResult[0].title, lyrics, song.albumArt, 'MC bot - Using Genius Api'));
-		} else if (lyrics.length >= 2048 && lyrics.length < 3000){
-			lyrics_1 = lyrics.slice(0, lyrics.length/2);
+		} else if (lyrics.length >= 2048 && lyrics.length < 3000) {
+			lyrics_1 = lyrics.slice(0, lyrics.length / 2);
 			lyrics_1 = lyrics_1.slice(0, lyrics_1.lastIndexOf('\n'));
 			lyrics_2 = lyrics.slice(lyrics_1.length, lyrics.length);
 			message.channel.send(embed_1.createLyrics('#FFFF00', searchResult[0].title, lyrics_1, song.albumArt, 'MC bot - Using Genius Api'));
 			message.channel.send(embed_2.createLyrics('#FFFF00', 'Lyrics Continued...', lyrics_2, '', 'MC bot - Using Genius Api'));
-		} else if (lyrics.length >= 3000 && lyrics.length < 3500){
-			lyrics_1 = lyrics.slice(0, lyrics.length/3);
+		} else if (lyrics.length >= 3000 && lyrics.length < 3500) {
+			lyrics_1 = lyrics.slice(0, lyrics.length / 3);
 			lyrics_1 = lyrics_1.slice(0, lyrics_1.lastIndexOf('\n'));
-			lyrics_2 = lyrics.slice(lyrics_1.length, (lyrics.length/3) * 2);
+			lyrics_2 = lyrics.slice(lyrics_1.length, (lyrics.length / 3) * 2);
 			lyrics_2 = lyrics_2.slice(0, lyrics_2.lastIndexOf('\n'));
 			lyrics_3 = lyrics.slice(lyrics_2.length, lyrics.length);
 			message.channel.send(embed_1.createLyrics('#FFFF00', searchResult[0].title, lyrics_1, song.albumArt, 'MC bot - Using Genius Api'));
 			message.channel.send(embed_2.createLyrics('#FFFF00', 'Lyrics Continued...', lyrics_2, '', 'MC bot - Using Genius Api'));
 			message.channel.send(embed_3.createLyrics('#FFFF00', 'Lyrics Continued...', lyrics_3, '', 'MC bot - Using Genius Api'));
 		} else if (lyrics.length >= 3500 && lyrics.length < 4000) {
-			lyrics_1 = lyrics.slice(0, lyrics.length/4);
+			lyrics_1 = lyrics.slice(0, lyrics.length / 4);
 			lyrics_1 = lyrics_1.slice(0, lyrics_1.lastIndexOf('\n'));
-			lyrics_2 = lyrics.slice(lyrics_1.length, lyrics.length/2);
+			lyrics_2 = lyrics.slice(lyrics_1.length, lyrics.length / 2);
 			lyrics_2 = lyrics_2.slice(0, lyrics_2.lastIndexOf('\n'));
-			lyrics_3 = lyrics.slice(lyrics_2.length, (lyrics.length/4) * 3);
+			lyrics_3 = lyrics.slice(lyrics_2.length, (lyrics.length / 4) * 3);
 			lyrics_3 = lyrics_3.slice(0, lyrics_3.lastIndexOf('\n'));
 			lyrics_4 = lyrics.slice(lyrics_3.length, lyrics.length);
 			message.channel.send(embed_1.createLyrics('#FFFF00', searchResult[0].title, lyrics_1, song.albumArt, 'MC bot - Using Genius Api'));
@@ -326,9 +341,7 @@ export default class Player {
 			message.channel.send(embed_3.createLyrics('#FFFF00', 'Lyrics Continued...', lyrics_3, '', 'MC bot - Using Genius Api'));
 			message.channel.send(embed_4.createLyrics('#FFFF00', 'Lyrics Continued...', lyrics_4, '', 'MC bot - Using Genius Api'));
 		} else if (lyrics.length > 4000) {
-			message.channel.send(embed_1.createLyrics('#FFFFFF', 'Error', 'Lyrics Exceed 4000 Characters.', song.albumArt, ''));
+			message.channel.send(embed_1.createLyrics('#FFFFFF', 'Error', 'Lyrics Exceed 4000 Characters.', song.albumArt, 'MC bot - Using Genius Api'));
 		}
-
 	}
-
 }

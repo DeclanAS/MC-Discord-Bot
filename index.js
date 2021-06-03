@@ -1,24 +1,24 @@
-const Discord = require('discord.js');
-const bot = new Discord.Client();
-const ytdl = require('ytdl-core');
-
-const token = 'BOT TOKEN';
-const prefix = "habibi";
-
+import * as config from './config.js'
+import * as Voice from './stt.js';
 import Player from './player.js';
 
+const Discord = require('discord.js');
 const Musicplayer = new Player();
+const bot = new Discord.Client();
+
 
 // On bot ready-state
-bot.on('ready', () => {  console.log("Habibi is ready");  });
+bot.on('ready', () => {
+	console.log("Habibi is ready");
+});
 
 bot.on('message', message => {
 
 	// Return if the message does not start with the prefix, or if a bot sent the message.
-	if(!message.content.startsWith(prefix) || message.author.bot) return;
+	if(!message.content.startsWith(config.Prefix) || message.author.bot) return;
 
 	// Parse other arguments.
-	let args = message.content.slice(prefix.length + 1).split(' ');
+	let args = message.content.slice(config.Prefix.length + 1).split(' ');
 	args.shift();
 
 	// Parse the command from text.
@@ -40,10 +40,19 @@ bot.on('message', message => {
 		case 'stop':
 		case 'skip':
 		case 'pause':
+		case 'queue':
 		case 'remove':
 		case 'resume':
-		case 'queue':
+		case 'lyrics':
 			Musicplayer.musicOptions(command, message, args);
+			break;
+
+		case 'stt':
+			Voice.listen(bot, message, Musicplayer, args);
+			break;
+
+		case 'stopstt':
+			Voice.stopListening(message);
 			break;
 
 	}
@@ -63,7 +72,6 @@ async function leave(message){
 	}
 }
 
-
 function validURL(str) { // Useful method to check if a url is valid.
 	var pattern = new RegExp('^(https?:\\/\\/)?'+ // Protocol.
 	'((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|'+ // Domain name.
@@ -74,5 +82,4 @@ function validURL(str) { // Useful method to check if a url is valid.
 	return !!pattern.test(str);
 }
 
-bot.login(token);
-	
+bot.login(config.Token);
