@@ -115,11 +115,21 @@ export default class Player {
 		this.dispatcher = connection.play(ytdl(url, { filter: 'audioonly', highWaterMark: 1 << 25 }));
 
 		// Dispatcher events:
+		// Start:
+		// - Sends a notification to the channel notifying that the song started.
 		// Finish:
 		// - Dequeue (shifts) the queue for both queue and title queue.
 		// - Checks if there is another song in the queue, and plays it depending on if it is a URL or YT search request.
 		// Error:
+		// - Most errors are caused by age-restricted videos being requested.
+		// - Age-restricted videos return 410 typically.
 		// - Displays to console. (Usually picks up TCP disconnect errors).
+
+		this.dispatcher.on('start', () => {
+			message.channel.send("Now playing: " + url.toString());
+		});
+
+
 		this.dispatcher.on('finish', () => {
 			this.queue.shift();
 			this.title.shift();
@@ -131,7 +141,23 @@ export default class Player {
 					this.search(message);
 		});
 
-		this.dispatcher.on('error', error => { console.log(error) });
+
+		this.dispatcher.on('error', error => {
+			let errorMessage = new Emessage()
+			message.channel.send(errorMessage.createNotification('#D6C911', 'Failed To Play Song', 'This is likely due to an age-restricted video request.', 'MC bot'))
+
+			console.log(error)
+			
+			this.queue.shift()
+			this.title.shift()
+
+			if (this.queue.length != 0)
+				if (ytdl.validateURL(this.queue[0]))
+					this.playLink(this.queue[0], this.connection, message);
+				else
+					this.search(message);
+
+		});
 	}
 
 	stop() { // Destroys the "song player", and empties the queues.
@@ -200,7 +226,6 @@ export default class Player {
 		if (result.pageInfo.totalResults > 0) {
 			var item = result.items[0]
 			var URL = 'https://www.youtube.com/watch?v=';
-			message.channel.send("Now playing: " + URL.concat(item.id.videoId));
 			this.playLink(URL.concat(item.id.videoId), this.connection, message);
 			console.log("Youtube Search Results For \"" + this.options.q + "\" --> " + item.snippet.title + " [" + item.id.videoId + "]");
 		} else {

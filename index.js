@@ -1,6 +1,9 @@
 import * as config from './config.js'
-import * as Voice from './stt.js';
-import Player from './player.js';
+import * as Voice from './stt.js'
+import * as help from './help.js'
+
+import Player from './player.js'
+import Emessage from './Emessage.js'
 
 const Discord = require('discord.js');
 const Musicplayer = new Player();
@@ -34,7 +37,11 @@ bot.on('message', message => {
 			break;
 
 		case 'help':
-			message.channel.send("No help for you!");
+			let helpMessage = new Emessage()
+			message.channel.send(helpMessage.createNotification('86FF33',
+				'So you asked for help...',
+				help.helpOptions,
+				'MC Bot'));
 			break;
 		case 'play':
 		case 'stop':

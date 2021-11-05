@@ -59,7 +59,10 @@ function processVoice(mapKey, message, VConn) {
 	VConn.on('speaking', async (user, speaking) => {
 		if (speaking.bitfield == 0 || user.bot)
 			return;
+
 		// console.log(`I am listening to: ${user.username}`);
+		// If someone on discord is connected via browser, this will cause
+		// an audio stream error. (The compressed data passed is corrupted).
 		const audioStream = VConn.receiver.createStream(user, { mode: 'pcm' });
 
 		audioStream.on('error', (error) => {
@@ -135,13 +138,11 @@ async function toText(new_buffer) {
 		lastCall = Math.floor(new Date());
 		stream.destroy();
 
-		if (output && '_text' in output && output._text.length)
-			return output._text
-
-		if (output && 'text' in output && output.text.length)
-			return output.text
-
-		return output;
+		// if (output && 'text' in output && output.text.length)
+			// return output.text
+	
+		let outputText = output.substring(output.lastIndexOf("text") + 7, output.lastIndexOf(",") - 2).replace("\"", "")
+		return outputText
 
 	} catch (exception) {
 		console.log('851:' + exception);
@@ -155,7 +156,7 @@ function validateText(text, message, id, user) {
 	if (mode == 1)
 		id.text_Channel.send('```' + user.username + ' said: ' + text + '```');
 
-	if (sbstr[0] == 'habibi' || sbstr[0] == 'michael') {
+	if (sbstr[0] == 'habibi' || sbstr[0] == 'Michael') {
 		if ((sbstr[1] == 'play' && sbstr.length >= 3) || (sbstr[1] == 'remove' && sbstr.length >= 3) || (sbstr[1] == 'lyrics' && sbstr.length >= 2)) {
 			for (var it = 2; it < sbstr.length; it++)
 				args = args + sbstr[it] + ' ';
