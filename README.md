@@ -27,3 +27,5 @@
   - Removes the song/Youtube video at a certain position in the queue.
 - \[prefix\] **lyrics**
   - Grabs the Youtube video name to send to the Genius API as a search query. Hopefully returns the correct lyrics.
+- \[prefix\] **stt** \[all/music\]
+  - Activates voice recognition. "all" will display all sentences; "music" will display recognized music commands.
