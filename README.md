@@ -1,4 +1,4 @@
-# MC Discord Bot
+# MC Discord Bot (OUTDATED, Good For Discord.js v12; See other repository)
  A multifunctional discord bot created using Javascript.
 
 ## Dependencies:
